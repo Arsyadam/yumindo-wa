@@ -10,11 +10,17 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3100 — scan QR with the warehouse WhatsApp number.
+Admin UI: `http://localhost:3100/?key=$WA_SERVICE_API_KEY` (or HTTP Basic Auth; password = API key).
+
+## Security
+
+- `/` (QR pairing) — **requires** API key (Basic Auth or `?key=`)
+- `/status`, `/qr`, `/send-document` — Bearer API key
+- `/health` — public liveness only (`{ ok: true }`)
 
 ## API
 
-All except `/`, `/health` require `Authorization: Bearer $WA_SERVICE_API_KEY`.
+`Authorization: Bearer $WA_SERVICE_API_KEY`
 
 - `GET /status` → `{ status, connected }`
 - `GET /qr` → `{ qrDataUrl }`
