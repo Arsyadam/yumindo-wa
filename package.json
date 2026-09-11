@@ -1,0 +1,28 @@
+{
+  "name": "yumindo-wa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Thin Baileys WhatsApp bridge for Yumindo order-request PDFs",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "express": "^5.1.0",
+    "pino": "^9.7.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.21",
+    "@types/qrcode": "^1.5.5",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
