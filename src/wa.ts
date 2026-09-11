@@ -74,6 +74,8 @@ export async function startWhatsApp(): Promise<void> {
       printQRInTerminal: false,
       syncFullHistory: false,
       markOnlineOnConnect: false,
+      // Keep WA web version reasonably current for QR pairing.
+      version: [2, 3000, 1023223821],
     });
 
     sock.ev.on("creds.update", saveCreds);
@@ -97,16 +99,21 @@ export async function startWhatsApp(): Promise<void> {
         if (connection === "close") {
           status = "disconnected";
           const code = disconnectCode(lastDisconnect?.error);
+          // 401/403/405 often mean protocol/version mismatch — back off harder
+          const hardFail = code === 401 || code === 403 || code === 405;
           const shouldReconnect = code !== DisconnectReason.loggedOut;
-          logger.warn({ code, shouldReconnect }, "WhatsApp connection closed");
+          logger.warn({ code, shouldReconnect, hardFail }, "WhatsApp connection closed");
 
           sock = null;
           starting = false;
 
           if (shouldReconnect) {
-            setTimeout(() => {
-              void startWhatsApp();
-            }, 2000);
+            setTimeout(
+              () => {
+                void startWhatsApp();
+              },
+              hardFail ? 15_000 : 2_000,
+            );
           } else {
             status = "qr_required";
             logger.error("Logged out — delete AUTH_DIR and rescan QR");

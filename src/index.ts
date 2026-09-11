@@ -10,6 +10,28 @@ import {
 const PORT = Number(process.env.PORT || 3100);
 const API_KEY = process.env.WA_SERVICE_API_KEY || "";
 
+function extractApiKey(req: express.Request): string {
+  const header = req.header("authorization") || "";
+  if (header.startsWith("Bearer ")) return header.slice(7).trim();
+  if (header.startsWith("Basic ")) {
+    try {
+      const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
+      // username:password — accept password (or either side) as API key
+      const i = decoded.indexOf(":");
+      if (i >= 0) {
+        const user = decoded.slice(0, i);
+        const pass = decoded.slice(i + 1);
+        if (pass === API_KEY || user === API_KEY) return API_KEY;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const q = req.query.key;
+  if (typeof q === "string" && q.trim()) return q.trim();
+  return "";
+}
+
 function requireApiKey(
   req: express.Request,
   res: express.Response,
@@ -19,23 +41,49 @@ function requireApiKey(
     res.status(500).json({ error: "WA_SERVICE_API_KEY belum di-set" });
     return;
   }
-  const header = req.header("authorization") || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : header;
-  if (token !== API_KEY) {
+  if (extractApiKey(req) !== API_KEY) {
+    res.setHeader("WWW-Authenticate", 'Basic realm="Yumindo WA"');
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
   next();
 }
 
+/** Browser admin UI — Basic auth or ?key= */
+function requireAdmin(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) {
+  if (!API_KEY) {
+    res.status(500).type("text").send("WA_SERVICE_API_KEY belum di-set");
+    return;
+  }
+  if (extractApiKey(req) !== API_KEY) {
+    res.setHeader("WWW-Authenticate", 'Basic realm="Yumindo WA"');
+    res
+      .status(401)
+      .type("html")
+      .send(`<!doctype html><html lang="id"><head><meta charset="utf-8"/><title>Unauthorized</title></head>
+<body style="font-family:system-ui;max-width:28rem;margin:3rem auto;padding:0 1rem">
+  <h1>Unauthorized</h1>
+  <p>Halaman pairing WhatsApp dilindungi. Login Basic Auth (password = API key) atau buka dengan <code>?key=…</code>.</p>
+</body></html>`);
+    return;
+  }
+  next();
+}
+
 const app = express();
+app.disable("x-powered-by");
 app.use(express.json({ limit: "25mb" }));
 
+// Public liveness only — no QR / no session details
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, status: getWaStatus() });
+  res.json({ ok: true });
 });
 
-app.get("/", (_req, res) => {
+app.get("/", requireAdmin, (_req, res) => {
   const status = getWaStatus();
   const qr = getQrDataUrl();
   res.type("html").send(`<!doctype html>
@@ -44,6 +92,7 @@ app.get("/", (_req, res) => {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="refresh" content="8" />
+  <meta name="robots" content="noindex,nofollow" />
   <title>Yumindo WA</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 420px; margin: 2rem auto; padding: 0 1rem; }
@@ -60,9 +109,8 @@ app.get("/", (_req, res) => {
       ? "<p>Terhubung. Siap kirim Order Request ke grup supplier.</p>"
       : qr
         ? `<p>Scan QR dengan nomor warehouse:</p><img src="${qr}" alt="QR WhatsApp" width="320" height="320" />`
-        : "<p>Menunggu QR / reconnect…</p>"
+        : "<p>Menunggu QR / reconnect… (kalau lama, cek log Dokploy — biasanya versi WA/Baileys.)</p>"
   }
-  <p><small>API: <code>/status</code> <code>/qr</code> <code>/send-document</code> (Bearer API key)</small></p>
 </body>
 </html>`);
 });
