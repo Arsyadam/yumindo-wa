@@ -1,5 +1,6 @@
 import makeWASocket, {
   DisconnectReason,
+  fetchLatestBaileysVersion,
   useMultiFileAuthState,
   type WASocket,
 } from "@whiskeysockets/baileys";
@@ -17,6 +18,7 @@ let status: WaStatus = "disconnected";
 let lastQr: string | null = null;
 let lastQrDataUrl: string | null = null;
 let starting = false;
+let lastError: string | null = null;
 
 function authDir() {
   return process.env.AUTH_DIR || path.join(process.cwd(), "auth");
@@ -40,6 +42,10 @@ export function getWaStatus(): WaStatus {
   return status;
 }
 
+export function getLastError(): string | null {
+  return lastError;
+}
+
 export function getQrDataUrl(): string | null {
   return lastQrDataUrl;
 }
@@ -56,6 +62,7 @@ async function setQr(qr: string) {
   lastQr = qr;
   lastQrDataUrl = await QRCode.toDataURL(qr, { margin: 1, width: 320 });
   status = "qr_required";
+  lastError = null;
 }
 
 export async function startWhatsApp(): Promise<void> {
@@ -67,15 +74,16 @@ export async function startWhatsApp(): Promise<void> {
     fs.mkdirSync(dir, { recursive: true });
 
     const { state, saveCreds } = await useMultiFileAuthState(dir);
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+    logger.info({ version, isLatest }, "using WA web version");
 
     sock = makeWASocket({
       auth: state,
+      version,
       logger: logger.child({ module: "baileys" }),
       printQRInTerminal: false,
       syncFullHistory: false,
       markOnlineOnConnect: false,
-      // Keep WA web version reasonably current for QR pairing.
-      version: [2, 3000, 1023223821],
     });
 
     sock.ev.on("creds.update", saveCreds);
@@ -93,16 +101,20 @@ export async function startWhatsApp(): Promise<void> {
           status = "connected";
           lastQr = null;
           lastQrDataUrl = null;
+          lastError = null;
           logger.info("WhatsApp connected");
         }
 
         if (connection === "close") {
           status = "disconnected";
           const code = disconnectCode(lastDisconnect?.error);
-          // 401/403/405 often mean protocol/version mismatch — back off harder
           const hardFail = code === 401 || code === 403 || code === 405;
           const shouldReconnect = code !== DisconnectReason.loggedOut;
-          logger.warn({ code, shouldReconnect, hardFail }, "WhatsApp connection closed");
+          lastError = `connection closed (${code})`;
+          logger.warn(
+            { code, shouldReconnect, hardFail },
+            "WhatsApp connection closed",
+          );
 
           sock = null;
           starting = false;
@@ -116,7 +128,8 @@ export async function startWhatsApp(): Promise<void> {
             );
           } else {
             status = "qr_required";
-            logger.error("Logged out — delete AUTH_DIR and rescan QR");
+            lastError = "Logged out — hapus AUTH_DIR lalu scan QR lagi";
+            logger.error(lastError);
           }
         }
       })();
@@ -125,6 +138,7 @@ export async function startWhatsApp(): Promise<void> {
     starting = false;
     sock = null;
     status = "disconnected";
+    lastError = error instanceof Error ? error.message : "start failed";
     throw error;
   } finally {
     starting = false;

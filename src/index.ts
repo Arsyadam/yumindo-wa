@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  getLastError,
   getQrDataUrl,
   getWaStatus,
   isConnected,
@@ -86,6 +87,7 @@ app.get("/health", (_req, res) => {
 app.get("/", requireAdmin, (_req, res) => {
   const status = getWaStatus();
   const qr = getQrDataUrl();
+  const err = getLastError();
   res.type("html").send(`<!doctype html>
 <html lang="id">
 <head>
@@ -97,19 +99,20 @@ app.get("/", requireAdmin, (_req, res) => {
   <style>
     body { font-family: system-ui, sans-serif; max-width: 420px; margin: 2rem auto; padding: 0 1rem; }
     .status { font-weight: 600; }
+    .err { color: #b91c1c; font-size: 0.9rem; }
     img { display: block; margin: 1rem 0; border: 1px solid #ddd; border-radius: 8px; }
-    code { background: #f4f4f4; padding: 0.1rem 0.3rem; border-radius: 4px; }
   </style>
 </head>
 <body>
   <h1>Yumindo WhatsApp</h1>
   <p>Status: <span class="status">${status}</span></p>
+  ${err ? `<p class="err">${err}</p>` : ""}
   ${
     status === "connected"
       ? "<p>Terhubung. Siap kirim Order Request ke grup supplier.</p>"
       : qr
         ? `<p>Scan QR dengan nomor warehouse:</p><img src="${qr}" alt="QR WhatsApp" width="320" height="320" />`
-        : "<p>Menunggu QR / reconnect… (kalau lama, cek log Dokploy — biasanya versi WA/Baileys.)</p>"
+        : "<p>Menunggu QR / reconnect…</p>"
   }
 </body>
 </html>`);
