@@ -166,33 +166,72 @@ export async function listGroups(): Promise<WaGroupSummary[]> {
     .sort((a, b) => a.name.localeCompare(b.name, "id"));
 }
 
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function randomBetween(minMs: number, maxMs: number) {
+  return minMs + Math.floor(Math.random() * (maxMs - minMs + 1));
+}
+
+/** Serialize outbound sends so OR blasts do not fire in parallel. */
+let sendChain: Promise<unknown> = Promise.resolve();
+
+async function withSendQueue<T>(fn: () => Promise<T>): Promise<T> {
+  const run = sendChain.then(fn, fn);
+  sendChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+/**
+ * Human-like send pacing. Does not guarantee WhatsApp will not ban.
+ * Steps: composing → jitter → paused → document → cooldown.
+ */
 export async function sendDocument(params: {
   groupJid: string;
   filename: string;
   caption?: string;
   documentBase64: string;
 }) {
-  if (!isConnected() || !sock) {
-    throw new Error("WhatsApp belum terhubung. Scan QR di / lalu coba lagi.");
-  }
+  return withSendQueue(async () => {
+    if (!isConnected() || !sock) {
+      throw new Error("WhatsApp belum terhubung. Scan QR di / lalu coba lagi.");
+    }
 
-  const jid = params.groupJid.trim();
-  if (!jid.endsWith("@g.us")) {
-    throw new Error("groupJid harus berakhiran @g.us");
-  }
+    const jid = params.groupJid.trim();
+    if (!jid.endsWith("@g.us")) {
+      throw new Error("groupJid harus berakhiran @g.us");
+    }
 
-  const buffer = Buffer.from(params.documentBase64, "base64");
-  if (!buffer.length) {
-    throw new Error("documentBase64 kosong");
-  }
+    const buffer = Buffer.from(params.documentBase64, "base64");
+    if (!buffer.length) {
+      throw new Error("documentBase64 kosong");
+    }
 
-  const filename =
-    params.filename.replace(/[^\w.\-()+ ]+/g, "_") || "document.pdf";
+    const filename =
+      params.filename.replace(/[^\w.\-()+ ]+/g, "_") || "document.pdf";
 
-  await sock.sendMessage(jid, {
-    document: buffer,
-    mimetype: "application/pdf",
-    fileName: filename.endsWith(".pdf") ? filename : `${filename}.pdf`,
-    caption: params.caption || undefined,
+    const composeMs = randomBetween(1_500, 4_000);
+    const cooldownMs = randomBetween(800, 2_000);
+
+    try {
+      await sock.sendPresenceUpdate("composing", jid);
+      await sleep(composeMs);
+      await sock.sendPresenceUpdate("paused", jid);
+    } catch (error) {
+      logger.warn({ err: error, jid }, "presence update failed; continuing send");
+    }
+
+    await sock.sendMessage(jid, {
+      document: buffer,
+      mimetype: "application/pdf",
+      fileName: filename.endsWith(".pdf") ? filename : `${filename}.pdf`,
+      caption: params.caption || undefined,
+    });
+
+    await sleep(cooldownMs);
   });
 }

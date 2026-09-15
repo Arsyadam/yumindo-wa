@@ -26,6 +26,9 @@ Admin UI: `http://localhost:3100/?key=$WA_SERVICE_API_KEY` (or HTTP Basic Auth; 
 - `GET /qr` → `{ qrDataUrl }`
 - `GET /groups` → `[{ jid, name, participantCount }]`
 - `POST /send-document` → `{ groupJid, filename, caption?, documentBase64 }`
+  - Sends are serialized (one at a time).
+  - Before each send: `composing` → random 1.5–4s delay → `paused`, then a short cooldown after send.
+  - This reduces ban risk; it does **not** guarantee WhatsApp will never ban the number.
 
 ## Docker / Dokploy
 
