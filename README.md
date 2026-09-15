@@ -32,4 +32,8 @@ Admin UI: `http://localhost:3100/?key=$WA_SERVICE_API_KEY` (or HTTP Basic Auth; 
 
 ## Docker / Dokploy
 
-Mount a volume at `/data/auth` (`AUTH_DIR`). Set `WA_SERVICE_API_KEY` and `PORT`.
+Mount a **persistent volume** at `/data/auth` (`AUTH_DIR`). Without it, every redeploy wipes the WhatsApp session and requires a new QR scan.
+
+Dokploy production uses named volume `yumindo-wa-auth` → `/data/auth`.
+
+Set `WA_SERVICE_API_KEY` and `PORT`.
