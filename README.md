@@ -15,7 +15,7 @@ Admin UI: `http://localhost:3100/?key=$WA_SERVICE_API_KEY` (or HTTP Basic Auth; 
 ## Security
 
 - `/` (QR pairing) — **requires** API key (Basic Auth or `?key=`)
-- `/status`, `/qr`, `/send-document` — Bearer API key
+- `/status`, `/qr`, `/groups`, `/send-document` — Bearer API key
 - `/health` — public liveness only (`{ ok: true }`)
 
 ## API
@@ -24,6 +24,7 @@ Admin UI: `http://localhost:3100/?key=$WA_SERVICE_API_KEY` (or HTTP Basic Auth; 
 
 - `GET /status` → `{ status, connected }`
 - `GET /qr` → `{ qrDataUrl }`
+- `GET /groups` → `[{ jid, name, participantCount }]`
 - `POST /send-document` → `{ groupJid, filename, caption?, documentBase64 }`
 
 ## Docker / Dokploy

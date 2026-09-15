@@ -145,6 +145,27 @@ export async function startWhatsApp(): Promise<void> {
   }
 }
 
+export type WaGroupSummary = {
+  jid: string;
+  name: string;
+  participantCount: number;
+};
+
+export async function listGroups(): Promise<WaGroupSummary[]> {
+  if (!isConnected() || !sock) {
+    throw new Error("WhatsApp belum terhubung. Scan QR di / lalu coba lagi.");
+  }
+
+  const groups = await sock.groupFetchAllParticipating();
+  return Object.values(groups)
+    .map((group) => ({
+      jid: group.id,
+      name: group.subject || group.id,
+      participantCount: group.participants?.length ?? 0,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "id"));
+}
+
 export async function sendDocument(params: {
   groupJid: string;
   filename: string;

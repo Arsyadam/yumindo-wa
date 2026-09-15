@@ -4,6 +4,7 @@ import {
   getQrDataUrl,
   getWaStatus,
   isConnected,
+  listGroups,
   sendDocument,
   startWhatsApp,
 } from "./wa";
@@ -135,6 +136,17 @@ app.get("/qr", requireApiKey, (_req, res) => {
     return;
   }
   res.json({ status: getWaStatus(), qrDataUrl: dataUrl });
+});
+
+app.get("/groups", requireApiKey, async (_req, res) => {
+  try {
+    const groups = await listGroups();
+    res.json(groups);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Gagal ambil grup";
+    const status = /belum terhubung/i.test(message) ? 400 : 500;
+    res.status(status).json({ error: message });
+  }
 });
 
 app.post("/send-document", requireApiKey, async (req, res) => {
